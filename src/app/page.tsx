@@ -24,7 +24,16 @@ export type Session = {
   difficulte: number;
 };
 
-export type ProjectWithSessions = Project & { sessions: Session[] };
+export type Idea = {
+  id: number;
+  text: string;
+  done: boolean;
+};
+
+export type ProjectWithSessions = Project & {
+  sessions: Session[];
+  ideas?: Idea[];
+};
 
 export default function HomePage() {
   const [projects, setProjects] = useState<ProjectWithSessions[]>([]);
@@ -34,7 +43,15 @@ export default function HomePage() {
   // Charger depuis localStorage
   useEffect(() => {
     const { projects: storedProjects, compact } = loadProjectsFromLocalStorage();
-    setProjects(storedProjects);
+
+    // On s'assure que chaque projet a bien sessions + ideas
+    const normalized: ProjectWithSessions[] = storedProjects.map((p) => ({
+      ...p,
+      sessions: (p as any).sessions || [],
+      ideas: (p as any).ideas || [],
+    }));
+
+    setProjects(normalized);
     setPreferenceCompact(compact);
   }, []);
 
@@ -58,6 +75,7 @@ export default function HomePage() {
       nom,
       dateCreation,
       sessions: [],
+      ideas: [],
     };
     setProjects((prev) => [...prev, newProject]);
     setCurrentProjectId(newProject.id);
@@ -98,6 +116,20 @@ export default function HomePage() {
     setPreferenceCompact(value);
   };
 
+  const handleUpdateIdeas = (projectId: number, ideas: Idea[]) => {
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === projectId
+          ? {
+              ...p,
+              ideas,
+            }
+          : p,
+      ),
+    );
+    // Si besoin, tu peux aussi ici persister dans IndexedDB
+  };
+
   return (
     <main className="app-layout">
       <motion.div
@@ -113,7 +145,7 @@ export default function HomePage() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.3 }}
         >
-          <div className="flex items-center justify-between mb-2">
+          <div className="mb-2 flex items-center justify-between">
             <div>
               <h1 className="app-card-title">Projets</h1>
               <p className="app-card-subtitle">
@@ -144,6 +176,7 @@ export default function HomePage() {
             onAddSession={handleAddSession}
             onDeleteProject={handleDeleteProject}
             calendarDays={[]} // plus utilisé, mais gardé dans le type pour compat
+            onUpdateIdeas={handleUpdateIdeas}
           />
           <Separator className="my-3" />
           {/* Tu peux ajouter ici d'autres éléments utiles plus tard */}

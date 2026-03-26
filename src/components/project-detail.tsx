@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import SessionAccordion from "./session-accordion";
 import StatsChart from "./stats-chart";
-import type { ProjectWithSessions, Session } from "@/app/page";
+import type { ProjectWithSessions, Session, Idea } from "@/app/page";
 import { formatFrenchDate, computeProjectStats } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -27,6 +27,7 @@ type Props = {
   onAddSession: (projectId: number, session: Omit<Session, "id">) => Promise<void>;
   onDeleteProject: (projectId: number) => Promise<void>;
   calendarDays: { date: string; label: string }[];
+  onUpdateIdeas: (projectId: number, ideas: Idea[]) => void;
 };
 
 function getTodayString(): string {
@@ -37,7 +38,12 @@ function getTodayString(): string {
   return `${y}-${m}-${d}`;
 }
 
-export default function ProjectDetail({ project, onAddSession, onDeleteProject }: Props) {
+export default function ProjectDetail({
+  project,
+  onAddSession,
+  onDeleteProject,
+  onUpdateIdeas,
+}: Props) {
   const [sessionDate, setSessionDate] = useState<string>(() => getTodayString());
   const [sessionDuree, setSessionDuree] = useState("");
   const [sessionLangage, setSessionLangage] = useState("");
@@ -47,7 +53,11 @@ export default function ProjectDetail({ project, onAddSession, onDeleteProject }
   const [sessionDifficulte, setSessionDifficulte] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [isIdeasOpen, setIsIdeasOpen] = useState(false);
+  const [newIdeaText, setNewIdeaText] = useState("");
+
   const sessions = project?.sessions ?? [];
+  const ideas: Idea[] = project?.ideas ?? [];
 
   const lastSession = useMemo(() => {
     if (!sessions.length) return null;
@@ -103,6 +113,32 @@ export default function ProjectDetail({ project, onAddSession, onDeleteProject }
     toast("Projet supprimé.");
   };
 
+  // Idées (todo)
+  const handleAddIdea = () => {
+    if (!project) return;
+    if (!newIdeaText.trim()) return;
+
+    const newIdea: Idea = {
+      id: Date.now(),
+      text: newIdeaText.trim(),
+      done: false,
+    };
+    onUpdateIdeas(project.id, [...ideas, newIdea]);
+    setNewIdeaText("");
+  };
+
+  const handleToggleIdea = (id: number) => {
+    if (!project) return;
+    const updated = ideas.map((i) => (i.id === id ? { ...i, done: !i.done } : i));
+    onUpdateIdeas(project.id, updated);
+  };
+
+  const handleDeleteIdea = (id: number) => {
+    if (!project) return;
+    const updated = ideas.filter((i) => i.id !== id);
+    onUpdateIdeas(project.id, updated);
+  };
+
   if (!project) {
     return (
       <div className="text-xs italic text-slate-400">
@@ -115,71 +151,88 @@ export default function ProjectDetail({ project, onAddSession, onDeleteProject }
 
   return (
     <div className="space-y-3">
+      {/* En-tête projet + boutons */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="text-sm sm:text-base font-semibold text-slate-900 truncate">
+          <div className="truncate text-sm font-semibold text-slate-900 sm:text-base">
             {project.nom}
           </div>
-          <div className="text-[11px] sm:text-xs text-slate-500">
+          <div className="text-[11px] text-slate-500 sm:text-xs">
             Créé le {formatFrenchDate(project.dateCreation)}
           </div>
         </div>
 
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              size="sm"
-              className="rounded-full text-[11px] px-3 py-1 btn-primary-violet"
-              type="button"
-            >
-              Supprimer
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent className="sm:max-w-md bg-white border border-slate-200 shadow-xl">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Supprimer ce projet ?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Cela supprimera le projet <span className="font-semibold">{project.nom}</span> et
-                toutes ses sessions. Action définitive.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Annuler</AlertDialogCancel>
-              <AlertDialogAction
-                className="btn-primary-violet text-white"
-                onClick={handleDeleteConfirm}
+        <div className="flex flex-col items-end gap-2">
+          <Button
+            size="sm"
+            type="button"
+            className="rounded-full bg-indigo-600 px-3 py-1 text-[11px] font-medium text-white hover:bg-indigo-700"
+            onClick={() => setIsIdeasOpen(true)}
+          >
+            Nouvelles idées
+          </Button>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                size="sm"
+                className="btn-primary-violet rounded-full px-3 py-1 text-[11px]"
+                type="button"
               >
                 Supprimer
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="bg-white border border-slate-200 shadow-xl sm:max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Supprimer ce projet ?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Cela supprimera le projet <span className="font-semibold">{project.nom}</span> et
+                  toutes ses sessions. Action définitive.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogAction
+                  className="btn-primary-violet text-white"
+                  onClick={handleDeleteConfirm}
+                >
+                  Supprimer
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </div>
 
+      {/* Infos + stats */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex flex-col gap-1">
           <Badge
             variant="outline"
-            className="w-fit text-[10px] sm:text-[11px] border-indigo-200 text-indigo-700"
+            className="w-fit border-indigo-200 text-[10px] text-indigo-700 sm:text-[11px]"
           >
             ID: #{project.id}
           </Badge>
-          <span className="text-[10px] sm:text-[11px] text-slate-500">{statsLabel}</span>
+          <span className="text-[10px] text-slate-500 sm:text-[11px]">{statsLabel}</span>
+        </div>
+        <div className="text-[10px] text-slate-500 sm:text-[11px]">
+          {ideas.length} {ideas.length > 1 ? "idées" : "idée"} en attente
         </div>
       </div>
 
-      {/* Chart: repli sur mobile */}
+      {/* Graphique */}
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 sm:p-3">
         <StatsChart project={project} />
       </div>
 
-      <hr className="border-dashed border-slate-200 my-2" />
+      <hr className="my-2 border-dashed border-slate-200" />
 
+      {/* Formulaire nouvelle session (ton code d'origine, juste recollé) */}
       <div>
-        <div className="text-[14px] sm:text-[15px] font-semibold text-slate-900 mb-1">
+        <div className="mb-1 text-[14px] font-semibold text-slate-900 sm:text-[15px]">
           Nouvelle session
         </div>
-        <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
+        <div className="mb-2 text-[10px] text-slate-500 sm:text-[11px]">
           Renseigne la session de travail pour <span className="font-medium">{project.nom}</span>.
         </div>
 
@@ -264,7 +317,7 @@ export default function ProjectDetail({ project, onAddSession, onDeleteProject }
             <Button
               type="submit"
               size="sm"
-              className="rounded-full btn-primary-violet px-4 py-1.5 text-xs font-semibold"
+              className="btn-primary-violet rounded-full px-4 py-1.5 text-xs font-semibold"
               disabled={loading}
             >
               {loading ? "Enregistrement..." : "Valider la session"}
@@ -273,9 +326,10 @@ export default function ProjectDetail({ project, onAddSession, onDeleteProject }
         </form>
       </div>
 
+      {/* Dernière session */}
       {last && (
         <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
-          <div className="flex items-center justify-between mb-1">
+          <div className="mb-1 flex items-center justify-between">
             <span className="font-semibold text-slate-800">Dernière session enregistrée</span>
             <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] text-indigo-700">
               {project.nom}
@@ -318,6 +372,86 @@ export default function ProjectDetail({ project, onAddSession, onDeleteProject }
       )}
 
       <SessionAccordion sessions={sessions} />
+
+      {/* Modale idées */}
+      {isIdeasOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-xl bg-white p-4 shadow-lg">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-800">
+                Idées pour la prochaine session
+              </h2>
+              <button
+                className="text-xs text-slate-500 hover:text-slate-700"
+                onClick={() => setIsIdeasOpen(false)}
+              >
+                Fermer
+              </button>
+            </div>
+
+            <div className="mb-3 flex gap-2">
+              <input
+                type="text"
+                className="flex-1 rounded border border-slate-200 px-2 py-1 text-xs"
+                placeholder="Nouvelle idée (ex: tester une nouvelle lib...)"
+                value={newIdeaText}
+                onChange={(e) => setNewIdeaText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddIdea();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700"
+                onClick={handleAddIdea}
+              >
+                Ajouter
+              </button>
+            </div>
+
+            <div className="max-h-64 space-y-1 overflow-y-auto">
+              {ideas.length === 0 && (
+                <p className="text-[11px] text-slate-400">
+                  Pas encore d’idées. Ajoute quelque chose à préparer pour la prochaine session.
+                </p>
+              )}
+
+              {ideas.map((idea) => (
+                <label
+                  key={idea.id}
+                  className="flex items-center justify-between rounded-md bg-slate-50 px-2 py-1"
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="h-3 w-3"
+                      checked={idea.done}
+                      onChange={() => handleToggleIdea(idea.id)}
+                    />
+                    <span
+                      className={`text-[11px] ${
+                        idea.done ? "line-through text-slate-400" : "text-slate-700"
+                      }`}
+                    >
+                      {idea.text}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="text-[10px] text-slate-400 hover:text-red-500"
+                    onClick={() => handleDeleteIdea(idea.id)}
+                  >
+                    Suppr.
+                  </button>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
